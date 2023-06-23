@@ -192,8 +192,7 @@ class HelpFormatter(object):
                 self.write(' ' * (first_col + self.current_indent))
 
             text_width = max(self.width - first_col - 2, 10)
-            lines = iter(wrap_text(second, text_width).splitlines())
-            if lines:
+            if lines := iter(wrap_text(second, text_width).splitlines()):
                 self.write(next(lines) + '\n')
                 for line in lines:
                     self.write('%*s%s\n' % (

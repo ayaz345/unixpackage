@@ -111,15 +111,11 @@ class ProgressBar(object):
 
     @property
     def pct(self):
-        if self.finished:
-            return 1.0
-        return min(self.pos / (float(self.length) or 1), 1.0)
+        return 1.0 if self.finished else min(self.pos / (float(self.length) or 1), 1.0)
 
     @property
     def time_per_iteration(self):
-        if not self.avg:
-            return 0.0
-        return sum(self.avg) / float(len(self.avg))
+        return 0.0 if not self.avg else sum(self.avg) / float(len(self.avg))
 
     @property
     def eta(self):
@@ -135,7 +131,7 @@ class ProgressBar(object):
     def format_pos(self):
         pos = str(self.pos)
         if self.length_known:
-            pos += '/%s' % self.length
+            pos += f'/{self.length}'
         return pos
 
     def format_pct(self):
@@ -151,15 +147,14 @@ class ProgressBar(object):
             bar += self.empty_char * (self.width - bar_length)
             if show_percent is None:
                 show_percent = not self.show_pos
+        elif self.finished:
+            bar = self.fill_char * self.width
         else:
-            if self.finished:
-                bar = self.fill_char * self.width
-            else:
-                bar = list(self.empty_char * (self.width or 1))
-                if self.time_per_iteration != 0:
-                    bar[int((math.cos(self.pos * self.time_per_iteration)
-                        / 2.0 + 0.5) * self.width)] = self.fill_char
-                bar = ''.join(bar)
+            bar = list(self.empty_char * (self.width or 1))
+            if self.time_per_iteration != 0:
+                bar[int((math.cos(self.pos * self.time_per_iteration)
+                    / 2.0 + 0.5) * self.width)] = self.fill_char
+            bar = ''.join(bar)
 
         if self.show_pos:
             info_bits.append(self.format_pos())
@@ -192,8 +187,7 @@ class ProgressBar(object):
                 clutter_length = term_len(self.format_progress_line())
                 new_width = max(0, get_terminal_size()[0] - clutter_length)
                 if new_width < old_width:
-                    buf.append(BEFORE_BAR)
-                    buf.append(' ' * self.max_width)
+                    buf.extend((BEFORE_BAR, ' ' * self.max_width))
                     self.max_width = new_width
                 self.width = new_width
 
@@ -263,8 +257,7 @@ def pager(text, color=None):
     stdout = _default_text_stdout()
     if not isatty(sys.stdin) or not isatty(stdout):
         return _nullpager(stdout, text, color)
-    pager_cmd = (os.environ.get('PAGER', None) or '').strip()
-    if pager_cmd:
+    if pager_cmd := (os.environ.get('PAGER', None) or '').strip():
         if WIN:
             return _tempfilepager(text, pager_cmd, color)
         return _pipepager(text, pager_cmd, color)
@@ -279,7 +272,7 @@ def pager(text, color=None):
     fd, filename = tempfile.mkstemp()
     os.close(fd)
     try:
-        if hasattr(os, 'system') and os.system('more "%s"' % filename) == 0:
+        if hasattr(os, 'system') and os.system(f'more "{filename}"') == 0:
             return _pipepager(text, 'more', color)
         return _nullpager(stdout, text, color)
     finally:
@@ -343,7 +336,7 @@ def _tempfilepager(text, cmd, color):
     with open_stream(filename, 'wb')[0] as f:
         f.write(text.encode(encoding))
     try:
-        os.system(cmd + ' "' + filename + '"')
+        os.system(f'{cmd} "{filename}"')
     finally:
         os.unlink(filename)
 
@@ -367,33 +360,35 @@ class Editor(object):
     def get_editor(self):
         if self.editor is not None:
             return self.editor
-        for key in 'VISUAL', 'EDITOR':
-            rv = os.environ.get(key)
-            if rv:
+        for key in ('VISUAL', 'EDITOR'):
+            if rv := os.environ.get(key):
                 return rv
         if WIN:
             return 'notepad'
-        for editor in 'vim', 'nano':
-            if os.system('which %s >/dev/null 2>&1' % editor) == 0:
-                return editor
-        return 'vi'
+        return next(
+            (
+                editor
+                for editor in ('vim', 'nano')
+                if os.system(f'which {editor} >/dev/null 2>&1') == 0
+            ),
+            'vi',
+        )
 
     def edit_file(self, filename):
         import subprocess
         editor = self.get_editor()
         if self.env:
             environ = os.environ.copy()
-            environ.update(self.env)
+            environ |= self.env
         else:
             environ = None
         try:
-            c = subprocess.Popen('%s "%s"' % (editor, filename),
-                                 env=environ, shell=True)
+            c = subprocess.Popen(f'{editor} "{filename}"', env=environ, shell=True)
             exit_code = c.wait()
             if exit_code != 0:
-                raise ClickException('%s: Editing failed!' % editor)
+                raise ClickException(f'{editor}: Editing failed!')
         except OSError as e:
-            raise ClickException('%s: Editing failed: %s' % (editor, e))
+            raise ClickException(f'{editor}: Editing failed: {e}')
 
     def edit(self, text):
         import tempfile
@@ -462,8 +457,7 @@ def open_url(url, wait=False, locate=False):
             args = 'explorer /select,"%s"' % _unquote_file(
                 url.replace('"', ''))
         else:
-            args = 'start %s "" "%s"' % (
-                wait and '/WAIT' or '', url.replace('"', ''))
+            args = f"""start {wait and '/WAIT' or ''} "" "{url.replace('"', '')}\""""
         return os.system(args)
 
     try:
@@ -472,9 +466,7 @@ def open_url(url, wait=False, locate=False):
         else:
             url = _unquote_file(url)
         c = subprocess.Popen(['xdg-open', url])
-        if wait:
-            return c.wait()
-        return 0
+        return c.wait() if wait else 0
     except OSError:
         if url.startswith(('http://', 'https://')) and not locate and not wait:
             import webbrowser

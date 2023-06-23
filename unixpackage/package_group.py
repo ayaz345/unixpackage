@@ -35,9 +35,8 @@ class PackageGroup(object):
 
                 if contents is None:
                     raise exceptions.PackageNotFound(package, url)
-                else:
-                    package_equivalents = json.loads(contents)
-                    utils.save_json_to_file(cache_filename, package_equivalents)
+                package_equivalents = json.loads(contents)
+                utils.save_json_to_file(cache_filename, package_equivalents)
 
             specific_package_equivalent = self.get_specific_package(package_equivalents)
 
@@ -46,8 +45,6 @@ class PackageGroup(object):
                     self.specific_packages.extend(specific_package_equivalent)
                 elif utils.is_string(specific_package_equivalent):
                     self.specific_packages.append(specific_package_equivalent)
-                elif specific_package_equivalent is None:
-                    pass
                 else:
                     raise PackageDescriptionNotUnderstood(package)
 
@@ -204,14 +201,13 @@ class MacOSBrewPackageGroup(PackageGroup):
 
     def check(self):
         """brew list --versions will simply not output not-installed packages specified."""
-        if not self.empty():
-            brew_list_output = utils.check_output(
-                ["brew", "list", "--versions", ] + self.specific_packages
-            ).decode("utf8").rstrip()
-            brew_list_installed_pkgs = [x for x in brew_list_output.split('\n') if x != ""]
-            return len(self.specific_packages) == len(brew_list_installed_pkgs)
-        else:
+        if self.empty():
             return True
+        brew_list_output = utils.check_output(
+            ["brew", "list", "--versions", ] + self.specific_packages
+        ).decode("utf8").rstrip()
+        brew_list_installed_pkgs = [x for x in brew_list_output.split('\n') if x != ""]
+        return len(self.specific_packages) == len(brew_list_installed_pkgs)
 
 
 def package_group_for_my_distro():
@@ -250,13 +246,13 @@ def package_group_for_my_distro():
             distro_and_version = "{0}-{1}".format(
                 this_distro, utils.lsb_release_codename().lower()
             )
-            if distro_and_version not in LINUX_DISTROS.keys():
-                raise exceptions.DistroVersionNotFound(distro_and_version)
-            return LINUX_DISTROS[distro_and_version]
-        else:
-            if this_distro in LINUX_DISTROS:
-                return LINUX_DISTROS[this_distro]
+            if distro_and_version in LINUX_DISTROS:
+                return LINUX_DISTROS[distro_and_version]
             else:
-                raise exceptions.UnsupportedPlatform(this_distro)
+                raise exceptions.DistroVersionNotFound(distro_and_version)
+        elif this_distro in LINUX_DISTROS:
+            return LINUX_DISTROS[this_distro]
+        else:
+            raise exceptions.UnsupportedPlatform(this_distro)
     else:
         raise exceptions.UnsupportedPlatform(sys.platform)

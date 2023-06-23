@@ -108,17 +108,17 @@ class StringParamType(ParamType):
     name = 'text'
 
     def convert(self, value, param, ctx):
-        if isinstance(value, bytes):
-            try:
-                enc = getattr(sys.stdin, 'encoding', None)
-                if enc is not None:
-                    value = value.decode(enc)
-            except UnicodeError:
-                try:
-                    value = value.decode(get_filesystem_encoding())
-                except UnicodeError:
-                    value = value.decode('utf-8', 'replace')
+        if not isinstance(value, bytes):
             return value
+        try:
+            enc = getattr(sys.stdin, 'encoding', None)
+            if enc is not None:
+                value = value.decode(enc)
+        except UnicodeError:
+            try:
+                value = value.decode(get_filesystem_encoding())
+            except UnicodeError:
+                value = value.decode('utf-8', 'replace')
         return value
 
     def __repr__(self):
@@ -137,10 +137,10 @@ class Choice(ParamType):
         self.choices = choices
 
     def get_metavar(self, param):
-        return '[%s]' % '|'.join(self.choices)
+        return f"[{'|'.join(self.choices)}]"
 
     def get_missing_message(self, param):
-        return 'Choose from %s.' % ', '.join(self.choices)
+        return f"Choose from {', '.join(self.choices)}."
 
     def convert(self, value, param, ctx):
         # Exact match
@@ -149,14 +149,17 @@ class Choice(ParamType):
 
         # Match through normalization
         if ctx is not None and \
-           ctx.token_normalize_func is not None:
+               ctx.token_normalize_func is not None:
             value = ctx.token_normalize_func(value)
             for choice in self.choices:
                 if ctx.token_normalize_func(choice) == value:
                     return choice
 
-        self.fail('invalid choice: %s. (choose from %s)' %
-                  (value, ', '.join(self.choices)), param, ctx)
+        self.fail(
+            f"invalid choice: {value}. (choose from {', '.join(self.choices)})",
+            param,
+            ctx,
+        )
 
     def __repr__(self):
         return 'Choice(%r)' % list(self.choices)
@@ -169,7 +172,7 @@ class IntParamType(ParamType):
         try:
             return int(value)
         except ValueError:
-            self.fail('%s is not a valid integer' % value, param, ctx)
+            self.fail(f'{value} is not a valid integer', param, ctx)
 
     def __repr__(self):
         return 'INT'
@@ -198,7 +201,7 @@ class IntRange(IntParamType):
             if self.max is not None and rv > self.max:
                 return self.max
         if self.min is not None and rv < self.min or \
-           self.max is not None and rv > self.max:
+               self.max is not None and rv > self.max:
             if self.min is None:
                 self.fail('%s is bigger than the maximum valid value '
                           '%s.' % (rv, self.max), param, ctx)
@@ -206,8 +209,11 @@ class IntRange(IntParamType):
                 self.fail('%s is smaller than the minimum valid value '
                           '%s.' % (rv, self.min), param, ctx)
             else:
-                self.fail('%s is not in the valid range of %s to %s.'
-                          % (rv, self.min, self.max), param, ctx)
+                self.fail(
+                    f'{rv} is not in the valid range of {self.min} to {self.max}.',
+                    param,
+                    ctx,
+                )
         return rv
 
     def __repr__(self):
@@ -225,7 +231,7 @@ class BoolParamType(ParamType):
             return True
         elif value in ('false', '0', 'no', 'n'):
             return False
-        self.fail('%s is not a valid boolean' % value, param, ctx)
+        self.fail(f'{value} is not a valid boolean', param, ctx)
 
     def __repr__(self):
         return 'BOOL'
@@ -238,8 +244,7 @@ class FloatParamType(ParamType):
         try:
             return float(value)
         except ValueError:
-            self.fail('%s is not a valid floating point value' %
-                      value, param, ctx)
+            self.fail(f'{value} is not a valid floating point value', param, ctx)
 
     def __repr__(self):
         return 'FLOAT'
@@ -253,7 +258,7 @@ class UUIDParameterType(ParamType):
         try:
             return uuid.UUID(value)
         except ValueError:
-            self.fail('%s is not a valid UUID value' % value, param, ctx)
+            self.fail(f'{value} is not a valid UUID value', param, ctx)
 
     def __repr__(self):
         return 'UUID'
@@ -307,9 +312,7 @@ class File(ParamType):
             if hasattr(value, 'read') or hasattr(value, 'write'):
                 return value
 
-            lazy = self.resolve_lazy_flag(value)
-
-            if lazy:
+            if lazy := self.resolve_lazy_flag(value):
                 f = LazyFile(value, self.mode, self.encoding, self.errors,
                              atomic=self.atomic)
                 if ctx is not None:
@@ -331,10 +334,11 @@ class File(ParamType):
                     ctx.call_on_close(safecall(f.flush))
             return f
         except (IOError, OSError) as e:
-            self.fail('Could not open file: %s: %s' % (
-                filename_to_ui(value),
-                get_streerror(e),
-            ), param, ctx)
+            self.fail(
+                f'Could not open file: {filename_to_ui(value)}: {get_streerror(e)}',
+                param,
+                ctx,
+            )
 
 
 class Path(ParamType):
@@ -386,31 +390,32 @@ class Path(ParamType):
         except OSError:
             if not self.exists:
                 return rv
-            self.fail('%s "%s" does not exist.' % (
-                self.path_type,
-                filename_to_ui(value)
-            ), param, ctx)
+            self.fail(
+                f'{self.path_type} "{filename_to_ui(value)}" does not exist.',
+                param,
+                ctx,
+            )
 
         if not self.file_okay and stat.S_ISREG(st.st_mode):
-            self.fail('%s "%s" is a file.' % (
-                self.path_type,
-                filename_to_ui(value)
-            ), param, ctx)
+            self.fail(f'{self.path_type} "{filename_to_ui(value)}" is a file.', param, ctx)
         if not self.dir_okay and stat.S_ISDIR(st.st_mode):
-            self.fail('%s "%s" is a directory.' % (
-                self.path_type,
-                filename_to_ui(value)
-            ), param, ctx)
+            self.fail(
+                f'{self.path_type} "{filename_to_ui(value)}" is a directory.',
+                param,
+                ctx,
+            )
         if self.writable and not os.access(value, os.W_OK):
-            self.fail('%s "%s" is not writable.' % (
-                self.path_type,
-                filename_to_ui(value)
-            ), param, ctx)
+            self.fail(
+                f'{self.path_type} "{filename_to_ui(value)}" is not writable.',
+                param,
+                ctx,
+            )
         if self.readable and not os.access(value, os.R_OK):
-            self.fail('%s "%s" is not readable.' % (
-                self.path_type,
-                filename_to_ui(value)
-            ), param, ctx)
+            self.fail(
+                f'{self.path_type} "{filename_to_ui(value)}" is not readable.',
+                param,
+                ctx,
+            )
 
         return rv
 
@@ -453,10 +458,7 @@ def convert_type(ty, default=None):
     """
     guessed_type = False
     if ty is None and default is not None:
-        if isinstance(default, tuple):
-            ty = tuple(map(type, default))
-        else:
-            ty = type(default)
+        ty = tuple(map(type, default)) if isinstance(default, tuple) else type(default)
         guessed_type = True
 
     if isinstance(ty, tuple):

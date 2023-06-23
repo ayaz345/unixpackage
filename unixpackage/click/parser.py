@@ -22,7 +22,7 @@ from .utils import unpack_args
 
 def _error_args(nargs, opt):
     if nargs == 1:
-        raise BadOptionUsage(opt, '%s option requires an argument' % opt)
+        raise BadOptionUsage(opt, f'{opt} option requires an argument')
     raise BadOptionUsage(opt, '%s option requires %d arguments' % (opt, nargs))
 
 
@@ -30,9 +30,7 @@ def split_opt(opt):
     first = opt[:1]
     if first.isalnum():
         return '', opt
-    if opt[1:2] == first:
-        return opt[:2], opt[2:]
-    return first, opt[1:]
+    return (opt[:2], opt[2:]) if opt[1:2] == first else (first, opt[1:])
 
 
 def normalize_opt(opt, ctx):
@@ -70,8 +68,7 @@ class Option(object):
         for opt in opts:
             prefix, value = split_opt(opt)
             if not prefix:
-                raise ValueError('Invalid start character for option (%s)'
-                                 % opt)
+                raise ValueError(f'Invalid start character for option ({opt})')
             self.prefixes.add(prefix[0])
             if len(prefix) == 1 and len(value) == 1:
                 self._short_opts.append(opt)
@@ -162,7 +159,7 @@ class OptionParser(object):
             self.ignore_unknown_options = ctx.ignore_unknown_options
         self._short_opt = {}
         self._long_opt = {}
-        self._opt_prefixes = set(['-', '--'])
+        self._opt_prefixes = {'-', '--'}
         self._args = []
 
     def add_option(self, opts, dest, action=None, nargs=1, const=None,
@@ -283,7 +280,7 @@ class OptionParser(object):
                 del state.rargs[:nargs]
 
         elif explicit_value is not None:
-            raise BadOptionUsage(opt, '%s option does not take a value' % opt)
+            raise BadOptionUsage(opt, f'{opt} option does not take a value')
 
         else:
             value = None

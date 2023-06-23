@@ -8,19 +8,18 @@ import time
 
 def parse_requirements_file(filename):
     """Parse Requirements file and return a list of packages."""
-    if filename is not None:
-        filename = os.path.abspath(filename)
-        try:
-            with open(filename, "r") as req_file_handle:
-                list_of_requirements = [
-                    line for line in req_file_handle.read().split('\n') \
-                        if line.strip() != "" and not line.startswith("#")
-                ]
-            return list_of_requirements
-        except IOError:
-            raise exceptions.RequirementsFileCannotBeRead(filename)
-    else:
+    if filename is None:
         return []
+    filename = os.path.abspath(filename)
+    try:
+        with open(filename, "r") as req_file_handle:
+            list_of_requirements = [
+                line for line in req_file_handle.read().split('\n') \
+                    if line.strip() != "" and not line.startswith("#")
+            ]
+        return list_of_requirements
+    except IOError:
+        raise exceptions.RequirementsFileCannotBeRead(filename)
 
 
 def install_command(generic_packages):

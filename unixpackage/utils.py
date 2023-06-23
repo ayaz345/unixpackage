@@ -25,7 +25,7 @@ def check_call(command, shell=True):
 
 def is_string(obj):
     """Is the object a string/unicode?"""
-    return str(type(obj)) == "<type 'unicode'>" or str(type(obj)) == "<class 'str'>"
+    return str(type(obj)) in {"<type 'unicode'>", "<class 'str'>"}
 
 
 def get_json_from_file(cache_filename):

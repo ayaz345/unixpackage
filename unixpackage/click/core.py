@@ -27,7 +27,7 @@ SUBCOMMANDS_METAVAR = 'COMMAND1 [ARGS]... [COMMAND2 [ARGS]...]...'
 def _bashcomplete(cmd, prog_name, complete_var=None):
     """Internal handler for the bash completion support."""
     if complete_var is None:
-        complete_var = '_%s_COMPLETE' % (prog_name.replace('-', '_')).upper()
+        complete_var = f"_{prog_name.replace('-', '_').upper()}_COMPLETE"
     complete_instr = os.environ.get(complete_var)
     if not complete_instr:
         return
@@ -214,8 +214,8 @@ class Context(object):
 
         #: A dictionary (-like object) with defaults for parameters.
         if default_map is None \
-           and parent is not None \
-           and parent.default_map is not None:
+               and parent is not None \
+               and parent.default_map is not None:
             default_map = parent.default_map.get(info_name)
         self.default_map = default_map
 
@@ -271,11 +271,7 @@ class Context(object):
         self.ignore_unknown_options = ignore_unknown_options
 
         if help_option_names is None:
-            if parent is not None:
-                help_option_names = parent.help_option_names
-            else:
-                help_option_names = ['--help']
-
+            help_option_names = ['--help'] if parent is None else parent.help_option_names
         #: The names for the help options.
         self.help_option_names = help_option_names
 
@@ -295,10 +291,9 @@ class Context(object):
         # prefix automatically.
         if auto_envvar_prefix is None:
             if parent is not None \
-               and parent.auto_envvar_prefix is not None and \
-               self.info_name is not None:
-                auto_envvar_prefix = '%s_%s' % (parent.auto_envvar_prefix,
-                                           self.info_name.upper())
+                   and parent.auto_envvar_prefix is not None and \
+                   self.info_name is not None:
+                auto_envvar_prefix = f'{parent.auto_envvar_prefix}_{self.info_name.upper()}'
         else:
             self.auto_envvar_prefix = auto_envvar_prefix.upper()
         self.auto_envvar_prefix = auto_envvar_prefix
@@ -418,11 +413,9 @@ class Context(object):
         information on the help page.  It's automatically created by
         combining the info names of the chain of contexts to the root.
         """
-        rv = ''
-        if self.info_name is not None:
-            rv = self.info_name
+        rv = self.info_name if self.info_name is not None else ''
         if self.parent is not None:
-            rv = self.parent.command_path + ' ' + rv
+            rv = f'{self.parent.command_path} {rv}'
         return rv.lstrip()
 
     def find_root(self):
@@ -680,10 +673,7 @@ class BaseCommand(object):
         else:
             _check_for_unicode_literals()
 
-        if args is None:
-            args = sys.argv[1:]
-        else:
-            args = list(args)
+        args = sys.argv[1:] if args is None else list(args)
         if prog_name is None:
             prog_name = make_str(os.path.basename(
                 sys.argv and sys.argv[0] or __file__))
@@ -877,9 +867,9 @@ class Command(BaseCommand):
             value, args = param.handle_parse_result(ctx, opts, args)
 
         if args and not ctx.allow_extra_args and not ctx.resilient_parsing:
-            ctx.fail('Got unexpected extra argument%s (%s)'
-                     % (len(args) != 1 and 's' or '',
-                        ' '.join(map(make_str, args))))
+            ctx.fail(
+                f"Got unexpected extra argument{len(args) != 1 and 's' or ''} ({' '.join(map(make_str, args))})"
+            )
 
         ctx.args = args
         return args
@@ -927,10 +917,7 @@ class MultiCommand(Command):
         self.no_args_is_help = no_args_is_help
         self.invoke_without_command = invoke_without_command
         if subcommand_metavar is None:
-            if chain:
-                subcommand_metavar = SUBCOMMANDS_METAVAR
-            else:
-                subcommand_metavar = SUBCOMMAND_METAVAR
+            subcommand_metavar = SUBCOMMANDS_METAVAR if chain else SUBCOMMAND_METAVAR
         self.subcommand_metavar = subcommand_metavar
         self.chain = chain
         #: The result callback that is stored.  This can be set or
@@ -1051,7 +1038,7 @@ class MultiCommand(Command):
         # set to ``*`` to inform the command that subcommands are executed
         # but nothing else.
         with ctx:
-            ctx.invoked_subcommand = args and '*' or None
+            ctx.invoked_subcommand = '*' if args else None
             Command.invoke(self, ctx)
 
             # Otherwise we make every single context and invoke them in a
@@ -1094,7 +1081,7 @@ class MultiCommand(Command):
         if cmd is None:
             if split_opt(cmd_name)[0]:
                 self.parse_args(ctx, ctx.args)
-            ctx.fail('No such command "%s".' % original_cmd_name)
+            ctx.fail(f'No such command "{original_cmd_name}".')
 
         return cmd_name, cmd, args[1:]
 
@@ -1243,18 +1230,14 @@ class Parameter(object):
                  default=None, callback=None, nargs=None, metavar=None,
                  expose_value=True, is_eager=False, envvar=None):
         self.name, self.opts, self.secondary_opts = \
-            self._parse_decls(param_decls or (), expose_value)
+                self._parse_decls(param_decls or (), expose_value)
 
         self.type = convert_type(type, default)
 
         # Default nargs to what the type tells us if we have that
         # information available.
         if nargs is None:
-            if self.type.is_composite:
-                nargs = self.type.arity
-            else:
-                nargs = 1
-
+            nargs = self.type.arity if self.type.is_composite else 1
         self.required = required
         self.callback = callback
         self.nargs = nargs
@@ -1285,10 +1268,7 @@ class Parameter(object):
     def get_default(self, ctx):
         """Given a context variable this calculates the default value."""
         # Otherwise go with the regular default.
-        if callable(self.default):
-            rv = self.default()
-        else:
-            rv = self.default
+        rv = self.default() if callable(self.default) else self.default
         return self.type_cast_value(ctx, rv)
 
     def add_to_parser(self, parser, ctx):
@@ -1337,9 +1317,7 @@ class Parameter(object):
     def value_is_missing(self, value):
         if value is None:
             return True
-        if (self.nargs != 1 or self.multiple) and value == ():
-            return True
-        return False
+        return bool((self.nargs != 1 or self.multiple) and value == ())
 
     def full_process_value(self, ctx, value):
         value = self.process_value(ctx, value)
@@ -1355,13 +1333,12 @@ class Parameter(object):
     def resolve_envvar_value(self, ctx):
         if self.envvar is None:
             return
-        if isinstance(self.envvar, (tuple, list)):
-            for envvar in self.envvar:
-                rv = os.environ.get(envvar)
-                if rv is not None:
-                    return rv
-        else:
+        if not isinstance(self.envvar, (tuple, list)):
             return os.environ.get(self.envvar)
+        for envvar in self.envvar:
+            rv = os.environ.get(envvar)
+            if rv is not None:
+                return rv
 
     def value_from_envvar(self, ctx):
         rv = self.resolve_envvar_value(ctx)
@@ -1451,10 +1428,7 @@ class Option(Parameter):
 
         # Flags
         if is_flag is None:
-            if flag_value is not None:
-                is_flag = True
-            else:
-                is_flag = bool(self.secondary_opts)
+            is_flag = True if flag_value is not None else bool(self.secondary_opts)
         if is_flag and default_is_missing:
             self.default = False
         if flag_value is None:
@@ -1462,7 +1436,7 @@ class Option(Parameter):
         self.is_flag = is_flag
         self.flag_value = flag_value
         if self.is_flag and isinstance(self.flag_value, bool) \
-           and type is None:
+               and type is None:
             self.type = BOOL
             self.is_bool_flag = True
         else:
@@ -1490,7 +1464,7 @@ class Option(Parameter):
             if not self.is_bool_flag and self.secondary_opts:
                 raise TypeError('Got secondary option for non boolean flag.')
             if self.is_bool_flag and self.hide_input \
-               and self.prompt is not None:
+                   and self.prompt is not None:
                 raise TypeError('Hidden input does not work with boolean '
                                 'flag prompts.')
             if self.count:
@@ -1502,26 +1476,24 @@ class Option(Parameter):
                                     'the same time.')
 
     def _parse_decls(self, decls, expose_value):
-        opts = []
         secondary_opts = []
         name = None
         possible_names = []
 
+        opts = []
         for decl in decls:
             if isidentifier(decl):
                 if name is not None:
                     raise TypeError('Name defined twice')
                 name = decl
             else:
-                split_char = decl[:1] == '/' and ';' or '/'
+                split_char = ';' if decl[:1] == '/' else '/'
                 if split_char in decl:
                     first, second = decl.split(split_char, 1)
-                    first = first.rstrip()
-                    if first:
+                    if first := first.rstrip():
                         possible_names.append(split_opt(first))
                         opts.append(first)
-                    second = second.lstrip()
-                    if second:
+                    if second := second.lstrip():
                         secondary_opts.append(second.lstrip())
                 else:
                     possible_names.append(split_opt(decl))
@@ -1538,20 +1510,14 @@ class Option(Parameter):
                 return None, opts, secondary_opts
             raise TypeError('Could not determine name for option')
 
-        if not opts and not secondary_opts:
-            raise TypeError('No options defined but a name was passed (%s). '
-                            'Did you mean to declare an argument instead '
-                            'of an option?' % name)
-
-        return name, opts, secondary_opts
+        if opts or secondary_opts:
+            return name, opts, secondary_opts
+        else:
+            raise TypeError(
+                f'No options defined but a name was passed ({name}). Did you mean to declare an argument instead of an option?'
+            )
 
     def add_to_parser(self, parser, ctx):
-        kwargs = {
-            'dest': self.name,
-            'nargs': self.nargs,
-            'obj': self,
-        }
-
         if self.multiple:
             action = 'append'
         elif self.count:
@@ -1559,17 +1525,28 @@ class Option(Parameter):
         else:
             action = 'store'
 
+        kwargs = {
+            'dest': self.name,
+            'nargs': self.nargs,
+            'obj': self,
+        }
         if self.is_flag:
             kwargs.pop('nargs', None)
             if self.is_bool_flag and self.secondary_opts:
-                parser.add_option(self.opts, action=action + '_const',
-                                  const=True, **kwargs)
-                parser.add_option(self.secondary_opts, action=action +
-                                  '_const', const=False, **kwargs)
+                parser.add_option(self.opts, action=f'{action}_const', const=True, **kwargs)
+                parser.add_option(
+                    self.secondary_opts,
+                    action=f'{action}_const',
+                    const=False,
+                    **kwargs,
+                )
             else:
-                parser.add_option(self.opts, action=action + '_const',
-                                  const=self.flag_value,
-                                  **kwargs)
+                parser.add_option(
+                    self.opts,
+                    action=f'{action}_const',
+                    const=self.flag_value,
+                    **kwargs,
+                )
         else:
             kwargs['action'] = action
             parser.add_option(self.opts, **kwargs)
@@ -1582,7 +1559,7 @@ class Option(Parameter):
             if any_slashes:
                 any_prefix_is_slash[:] = [True]
             if not self.is_flag and not self.count:
-                rv += ' ' + self.make_metavar()
+                rv += f' {self.make_metavar()}'
             return rv
 
         rv = [_write_opts(self.opts)]
@@ -1592,14 +1569,20 @@ class Option(Parameter):
         help = self.help or ''
         extra = []
         if self.default is not None and self.show_default:
-            extra.append('default: %s' % (
-                         ', '.join('%s' % d for d in self.default)
-                         if isinstance(self.default, (list, tuple))
-                         else self.default, ))
+            extra.append(
+                (
+                    'default: %s'
+                    % (
+                        ', '.join(f'{d}' for d in self.default)
+                        if isinstance(self.default, (list, tuple))
+                        else self.default,
+                    )
+                )
+            )
         if self.required:
             extra.append('required')
         if extra:
-            help = '%s[%s]' % (help and help + '  ' or '', '; '.join(extra))
+            help = f"{help and f'{help}  ' or ''}[{'; '.join(extra)}]"
 
         return ((any_prefix_is_slash and '; ' or ' / ').join(rv), help)
 
@@ -1609,10 +1592,14 @@ class Option(Parameter):
         # if we're the the default one in which case we return the flag
         # value as default.
         if self.is_flag and not self.is_bool_flag:
-            for param in ctx.command.params:
-                if param.name == self.name and param.default:
-                    return param.flag_value
-            return None
+            return next(
+                (
+                    param.flag_value
+                    for param in ctx.command.params
+                    if param.name == self.name and param.default
+                ),
+                None,
+            )
         return Parameter.get_default(self, ctx)
 
     def prompt_for_value(self, ctx):
@@ -1639,8 +1626,8 @@ class Option(Parameter):
         if rv is not None:
             return rv
         if self.allow_from_autoenv and \
-           ctx.auto_envvar_prefix is not None:
-            envvar = '%s_%s' % (ctx.auto_envvar_prefix, self.name.upper())
+               ctx.auto_envvar_prefix is not None:
+            envvar = f'{ctx.auto_envvar_prefix}_{self.name.upper()}'
             return os.environ.get(envvar)
 
     def value_from_envvar(self, ctx):
@@ -1648,7 +1635,7 @@ class Option(Parameter):
         if rv is None:
             return None
         value_depth = (self.nargs != 1) + bool(self.multiple)
-        if value_depth > 0 and rv is not None:
+        if value_depth > 0:
             rv = self.type.split_envvar_value(rv)
             if self.multiple and self.nargs != 1:
                 rv = batch(rv, self.nargs)
@@ -1672,10 +1659,7 @@ class Argument(Parameter):
 
     def __init__(self, param_decls, required=None, **attrs):
         if required is None:
-            if attrs.get('default') is not None:
-                required = False
-            else:
-                required = attrs.get('nargs', 1) > 0
+            required = attrs.get('nargs', 1) > 0 if attrs.get('default') is None else False
         Parameter.__init__(self, param_decls, required=required, **attrs)
         if self.default is not None and self.nargs < 0:
             raise TypeError('nargs=-1 in combination with a default value '
@@ -1683,16 +1667,14 @@ class Argument(Parameter):
 
     @property
     def human_readable_name(self):
-        if self.metavar is not None:
-            return self.metavar
-        return self.name.upper()
+        return self.metavar if self.metavar is not None else self.name.upper()
 
     def make_metavar(self):
         if self.metavar is not None:
             return self.metavar
         var = self.name.upper()
         if not self.required:
-            var = '[%s]' % var
+            var = f'[{var}]'
         if self.nargs != 1:
             var += '...'
         return var
